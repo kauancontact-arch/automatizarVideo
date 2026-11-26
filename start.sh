@@ -2,6 +2,13 @@
 set -euo pipefail
 
 # Migra o schema antes de subir. Idempotente: nos deploys seguintes nao faz nada.
+# Sem FONTCONFIG_FILE o libass nao acha config nenhuma neste container.
+export FONTCONFIG_FILE="${FONTCONFIG_FILE:-/app/assets/fontconfig/fonts.conf}"
+mkdir -p /tmp/fontconfig
+
+echo "[start] fontes visiveis ao ffmpeg:"
+fc-list : family 2>/dev/null | sort -u | head -5 || echo "  (fc-list indisponivel)"
+
 echo "[start] aplicando schema"
 npx prisma db push --skip-generate
 

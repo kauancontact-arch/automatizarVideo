@@ -95,7 +95,17 @@ const no: DefinicaoNo<Config> = {
 
     log(`renderizando ${imagens.length} cenas, ${duracaoAudio.toFixed(1)}s`);
     const comecou = Date.now();
-    await run('ffmpeg', args, { maxBuffer: 1024 * 1024 * 64 });
+
+    try {
+      await run('ffmpeg', args, { maxBuffer: 1024 * 1024 * 64 });
+    } catch (e) {
+      // A mensagem de erro do execFile corta o stderr onde o ffmpeg escreve o
+      // motivo real, sempre nas ultimas linhas. Sem isto o erro chega inutil.
+      const stderr = String((e as { stderr?: string }).stderr ?? '');
+      const fim = stderr.trim().split('\n').slice(-12).join('\n');
+      throw new Error(`ffmpeg falhou:\n${fim || (e as Error).message}`);
+    }
+
     const segundosCpu = (Date.now() - comecou) / 1000;
     log(`render em ${segundosCpu.toFixed(0)}s`);
 

@@ -10,6 +10,9 @@ nixPkgs = ["nodejs_22", "ffmpeg-full", "fontconfig", "dejavu_fonts", "openssl"]
 [phases.install]
 cmds = ["npm install --no-audit --no-fund"]
 
+[variables]
+FONTCONFIG_FILE = "/app/assets/fontconfig/fonts.conf"
+
 [phases.build]
 cmds = ["npm run build"]
 
