@@ -23,79 +23,111 @@ export type EntradaRender = {
   trilhaPath?: string;
   assPath: string;
   saidaPath: string;
+  pasta: string;
   largura?: number;
   altura?: number;
   fps?: number;
 };
 
-export type ComandoRender = { args: string[]; filtro: string; textoDoComando: string };
+export type PlanoRender = {
+  /** Uma cena por vez: e isso que mantem a memoria baixa. */
+  cenas: { args: string[]; saida: string; rotulo: string }[];
+  listaPath: string;
+  listaConteudo: string;
+  finalArgs: string[];
+  filtroFinal: string;
+  filtroFinalPath: string;
+  textoDoComando: string;
+};
 
 /**
- * Monta o grafo de filtros e os argumentos. O grafo vai num arquivo via
- * -filter_complex_script: inline ele estoura o limite de argumento do shell
- * com seis cenas e vira impossivel de depurar.
+ * Render em duas passadas.
+ *
+ * A primeira versao montava um filter_complex unico com um zoompan por cena,
+ * todos vivos ao mesmo tempo. Com oito cenas a 1350x2400 o ffmpeg era morto
+ * pelo cgroup sem escrever erro nenhum — morte silenciosa, que e a assinatura
+ * de OOM e nao de falha de filtro.
+ *
+ * Agora cada cena vira um clipe curto, uma de cada vez, e a segunda passada
+ * concatena sem re-escalar, aplica a legenda e mixa o audio. A memoria passa
+ * a ser a de uma cena so, nao a de todas.
  */
-export function montarComando(e: EntradaRender, t: TemplateVideo): ComandoRender {
+export function montarPlano(e: EntradaRender, t: TemplateVideo): PlanoRender {
   const largura = e.largura ?? 1080;
   const altura = e.altura ?? 1920;
   const fps = e.fps ?? 30;
 
-  // Escala intermediaria maior que a saida: e o espaco que o zoompan percorre.
-  const escalaW = Math.round(largura * 1.25);
-  const escalaH = Math.round(altura * 1.25);
+  // 1.15x em vez de 1.25x: espaco suficiente para o movimento de camera, com
+  // bem menos pixel por quadro intermediario.
+  const escalaW = Math.round(largura * 1.15);
+  const escalaH = Math.round(altura * 1.15);
 
-  const args: string[] = ['-y'];
-
-  for (const [i, img] of e.imagens.entries()) {
-    args.push('-loop', '1', '-t', e.duracoes[i].toFixed(2), '-i', img);
-  }
-
-  const idxAudio = e.imagens.length;
-  args.push('-i', e.audioPath);
-
-  const temTrilha = Boolean(e.trilhaPath);
-  const idxTrilha = idxAudio + 1;
-  if (e.trilhaPath) args.push('-i', e.trilhaPath);
-
-  const partes: string[] = [];
-
-  for (const [i, dur] of e.duracoes.entries()) {
-    // d do zoompan e em QUADROS, nao em segundos. Errar isso e a causa mais
-    // comum de video que acaba antes do audio.
+  const cenas = e.imagens.map((img, i) => {
+    const dur = e.duracoes[i];
     const quadros = Math.max(1, Math.round(dur * fps));
+    const passo = (t.camera.intensidade / quadros).toFixed(6);
+    const teto = (1 + t.camera.intensidade).toFixed(3);
+
     const mov =
       t.camera.movimento === 'nenhum'
         ? `scale=${largura}:${altura}`
         : t.camera.movimento === 'zoom-in'
-          ? `zoompan=z='min(zoom+${(t.camera.intensidade / quadros).toFixed(6)},${(1 + t.camera.intensidade).toFixed(3)})':d=${quadros}:s=${largura}x${altura}:fps=${fps}`
-          : `zoompan=z='max(${(1 + t.camera.intensidade).toFixed(3)}-on*${(t.camera.intensidade / quadros).toFixed(6)},1)':d=${quadros}:s=${largura}x${altura}:fps=${fps}`;
+          ? `zoompan=z='min(zoom+${passo},${teto})':d=${quadros}:s=${largura}x${altura}:fps=${fps}`
+          : `zoompan=z='max(${teto}-on*${passo},1)':d=${quadros}:s=${largura}x${altura}:fps=${fps}`;
 
-    partes.push(
-      `[${i}:v]scale=${escalaW}:${escalaH}:force_original_aspect_ratio=increase,crop=${escalaW}:${escalaH},setsar=1,${mov}[v${i}]`,
-    );
-  }
+    const saida = `${e.pasta}/clipe${i + 1}.mp4`;
 
-  const rotulos = e.imagens.map((_, i) => `[v${i}]`).join('');
-  partes.push(`${rotulos}concat=n=${e.imagens.length}:v=1:a=0[vc]`);
+    return {
+      rotulo: `cena ${i + 1}/${e.imagens.length}`,
+      saida,
+      args: [
+        '-y',
+        '-loop', '1',
+        '-t', dur.toFixed(3),
+        '-i', img,
+        '-vf',
+        `scale=${escalaW}:${escalaH}:force_original_aspect_ratio=increase,crop=${escalaW}:${escalaH},setsar=1,${mov},format=yuv420p`,
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-crf', '18',
+        '-r', String(fps),
+        '-an',
+        saida,
+      ],
+    };
+  });
+
+  const listaPath = `${e.pasta}/clipes.txt`;
+  const listaConteudo = cenas.map((c) => `file '${c.saida}'`).join('\n');
 
   const assEscapado = e.assPath.replace(/\\/g, '/').replace(/:/g, '\\:');
   const fontesEscapado = PASTA_FONTES.replace(/\\/g, '/').replace(/:/g, '\\:');
-  partes.push(`[vc]subtitles='${assEscapado}':fontsdir='${fontesEscapado}'[vt]`);
 
+  const partes = [`[0:v]subtitles='${assEscapado}':fontsdir='${fontesEscapado}'[vt]`];
+
+  const temTrilha = Boolean(e.trilhaPath);
   if (temTrilha) {
-    partes.push(`[${idxTrilha}:a]volume=${t.audio.db}dB[bg]`);
+    partes.push(`[2:a]volume=${t.audio.db}dB[bg]`);
     partes.push(
       t.audio.ducking
-        ? `[${idxAudio}:a][bg]sidechaincompress=threshold=0.05:ratio=8:attack=20:release=400[mix]`
-        : `[${idxAudio}:a][bg]amix=inputs=2:duration=first:dropout_transition=0[mix]`,
+        ? `[1:a][bg]sidechaincompress=threshold=0.05:ratio=8:attack=20:release=400[mix]`
+        : `[1:a][bg]amix=inputs=2:duration=first:dropout_transition=0[mix]`,
     );
   }
 
   const total = e.duracoes.reduce((s, d) => s + d, 0);
+  const filtroFinalPath = `${e.pasta}/final.txt`;
 
-  args.push(
+  const finalArgs = [
+    '-y',
+    '-f', 'concat',
+    '-safe', '0',
+    '-i', listaPath,
+    '-i', e.audioPath,
+    ...(e.trilhaPath ? ['-i', e.trilhaPath] : []),
+    '-filter_complex_script', filtroFinalPath,
     '-map', '[vt]',
-    '-map', temTrilha ? '[mix]' : `${idxAudio}:a`,
+    '-map', temTrilha ? '[mix]' : '1:a',
     '-c:v', 'libx264',
     '-preset', 'veryfast',
     '-crf', '21',
@@ -106,13 +138,23 @@ export function montarComando(e: EntradaRender, t: TemplateVideo): ComandoRender
     '-movflags', '+faststart',
     '-t', total.toFixed(2),
     e.saidaPath,
-  );
+  ];
 
-  const filtro = partes.join(';\n');
+  const filtroFinal = partes.join(';\n');
 
-  return {
-    args,
-    filtro,
-    textoDoComando: `ffmpeg ${args.join(' ')}\n\n--- filtro ---\n${filtro}`,
-  };
+  const textoDoComando = [
+    '--- passada 1: uma cena por vez ---',
+    ...cenas.map((c) => `ffmpeg ${c.args.join(' ')}`),
+    '',
+    '--- lista de concatenacao ---',
+    listaConteudo,
+    '',
+    '--- passada 2: concat + legenda + audio ---',
+    `ffmpeg ${finalArgs.join(' ')}`,
+    '',
+    '--- filtro da passada 2 ---',
+    filtroFinal,
+  ].join('\n');
+
+  return { cenas, listaPath, listaConteudo, finalArgs, filtroFinal, filtroFinalPath, textoDoComando };
 }

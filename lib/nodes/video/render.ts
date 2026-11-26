@@ -5,7 +5,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { db } from '@/lib/db';
 import { montarAss } from '@/lib/ffmpeg/ass';
-import { montarComando, type TemplateVideo } from '@/lib/ffmpeg/build';
+import { montarPlano, type TemplateVideo } from '@/lib/ffmpeg/build';
 import { conferir, sondar } from '@/lib/ffmpeg/probe';
 import { pastaDoRun } from '@/lib/ffmpeg/paths';
 import { subir } from '@/lib/providers/storage';
@@ -72,7 +72,7 @@ const no: DefinicaoNo<Config> = {
     const saidaPath = join(pasta, 'saida.mp4');
     const [largura, altura] = dimensoes(config.resolucao);
 
-    const cmd = montarComando(
+    const plano = montarPlano(
       {
         imagens,
         duracoes,
@@ -80,6 +80,7 @@ const no: DefinicaoNo<Config> = {
         trilhaPath: config.trilha ?? undefined,
         assPath,
         saidaPath,
+        pasta,
         largura,
         altura,
         fps: config.fps,
@@ -87,24 +88,20 @@ const no: DefinicaoNo<Config> = {
       t,
     );
 
-    const filtroPath = join(pasta, 'render.txt');
-    await writeFile(filtroPath, cmd.filtro, 'utf8');
-
-    const args = [...cmd.args];
-    args.splice(args.indexOf('-map'), 0, '-filter_complex_script', filtroPath);
-
     log(`renderizando ${imagens.length} cenas, ${duracaoAudio.toFixed(1)}s`);
     const comecou = Date.now();
 
-    try {
-      await run('ffmpeg', args, { maxBuffer: 1024 * 1024 * 64 });
-    } catch (e) {
-      // A mensagem de erro do execFile corta o stderr onde o ffmpeg escreve o
-      // motivo real, sempre nas ultimas linhas. Sem isto o erro chega inutil.
-      const stderr = String((e as { stderr?: string }).stderr ?? '');
-      const fim = stderr.trim().split('\n').slice(-12).join('\n');
-      throw new Error(`ffmpeg falhou:\n${fim || (e as Error).message}`);
+    // Passada 1: um clipe por cena, sequencial. Oito zoompan ao mesmo tempo
+    // estouravam a memoria do container e o ffmpeg morria sem escrever erro.
+    for (const cena of plano.cenas) {
+      await rodarFfmpeg(cena.args, cena.rotulo);
+      log(`${cena.rotulo} pronta`);
     }
+
+    // Passada 2: concatena sem re-escalar, queima a legenda e mixa o audio.
+    await writeFile(plano.listaPath, plano.listaConteudo, 'utf8');
+    await writeFile(plano.filtroFinalPath, plano.filtroFinal, 'utf8');
+    await rodarFfmpeg(plano.finalArgs, 'montagem final');
 
     const segundosCpu = (Date.now() - comecou) / 1000;
     log(`render em ${segundosCpu.toFixed(0)}s`);
@@ -128,10 +125,34 @@ const no: DefinicaoNo<Config> = {
         meta: { ...envelope.meta, templateVideoId: config.templateId },
       },
       uso: { provider: 'railway', unidade: 'segundos', quantidade: segundosCpu, modelo: 'render' } as any,
-      comando: cmd.textoDoComando,
+      comando: plano.textoDoComando,
     };
   },
 };
+
+/**
+ * O ffmpeg morto por falta de memoria sai sem escrever erro nenhum: o stderr
+ * para no meio e o sinal e SIGKILL. Sem traduzir isso, o erro que chega na
+ * interface nao diz nada.
+ */
+async function rodarFfmpeg(args: string[], rotulo: string): Promise<void> {
+  try {
+    await run('ffmpeg', args, { maxBuffer: 1024 * 1024 * 64 });
+  } catch (e) {
+    const erro = e as { stderr?: string; signal?: string; code?: number };
+    const stderr = String(erro.stderr ?? '');
+    const fim = stderr.trim().split('\n').slice(-12).join('\n');
+
+    if (erro.signal === 'SIGKILL' || erro.code === 137) {
+      throw new Error(
+        `${rotulo}: o ffmpeg foi morto pelo sistema, quase sempre falta de memoria. ` +
+          `Reduza a resolucao para 720x1280 no no de render, ou de mais RAM ao servico.\n${fim}`,
+      );
+    }
+
+    throw new Error(`${rotulo}: ffmpeg falhou (sinal ${erro.signal ?? 'nenhum'}, codigo ${erro.code ?? '?'})\n${fim}`);
+  }
+}
 
 function dimensoes(r: Config['resolucao']): [number, number] {
   const [w, h] = r.split('x').map(Number);
