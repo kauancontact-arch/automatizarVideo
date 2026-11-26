@@ -84,15 +84,25 @@ export function montarPlano(e: EntradaRender, t: TemplateVideo): PlanoRender {
   const cenas = e.imagens.map((img, i) => {
     const dur = e.duracoes[i];
     const quadros = Math.max(1, Math.round(dur * fps));
-    const passo = (t.camera.intensidade / quadros).toFixed(6);
+
+    // d=1 e obrigatorio aqui. O zoompan emite d quadros PARA CADA quadro de
+    // entrada: com -loop e d=quadros, uma cena de 5s virava 20 mil quadros,
+    // ou seja 12 minutos de video. Com -framerate na entrada e d=1, cada
+    // quadro de entrada sai uma vez e o total bate exatamente com a duracao.
+    //
+    // O zoom e dirigido por on, o indice do quadro de saida, e x/y mantem o
+    // enquadramento no centro — sem eles o zoompan puxa para o canto superior
+    // esquerdo, que e o visual errado.
+    const passo = (t.camera.intensidade / quadros).toFixed(8);
     const teto = (1 + t.camera.intensidade).toFixed(3);
+    const centro = `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`;
 
     const mov =
       t.camera.movimento === 'nenhum'
         ? `scale=${largura}:${altura}`
         : t.camera.movimento === 'zoom-in'
-          ? `zoompan=z='min(zoom+${passo},${teto})':d=${quadros}:s=${largura}x${altura}:fps=${fps}`
-          : `zoompan=z='max(${teto}-on*${passo},1)':d=${quadros}:s=${largura}x${altura}:fps=${fps}`;
+          ? `zoompan=z='min(1+${passo}*on,${teto})':${centro}:d=1:s=${largura}x${altura}:fps=${fps}`
+          : `zoompan=z='max(${teto}-${passo}*on,1)':${centro}:d=1:s=${largura}x${altura}:fps=${fps}`;
 
     const saida = `${e.pasta}/clipe${i + 1}.mp4`;
 
@@ -103,6 +113,9 @@ export function montarPlano(e: EntradaRender, t: TemplateVideo): PlanoRender {
         '-y',
         ...LIMITE_THREADS,
         '-loop', '1',
+        // Sem -framerate a entrada roda a 25 fps e o total de quadros nao
+        // bate com o fps de saida.
+        '-framerate', String(fps),
         '-t', dur.toFixed(3),
         '-i', img,
         '-vf',
@@ -112,6 +125,8 @@ export function montarPlano(e: EntradaRender, t: TemplateVideo): PlanoRender {
         '-crf', '18',
         '-x264-params', X264_PARAMS,
         '-r', String(fps),
+        // Teto rigido: se alguma conta acima escapar, o clipe ainda para aqui.
+        '-frames:v', String(quadros),
         '-an',
         saida,
       ],

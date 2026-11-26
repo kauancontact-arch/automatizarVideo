@@ -52,13 +52,33 @@ export async function executarRun(runId: string, opcoes: OpcoesExecucao = {}): P
     const comecou = Date.now();
     const linhas: string[] = [];
 
+    // O passo nasce como "rodando" e os logs sao gravados a cada linha. Antes
+    // tudo so aparecia quando o no terminava, o que deixava um render de
+    // varios minutos sem sinal nenhum de vida na interface.
+    await db.runStep.upsert({
+      where: { runId_nodeId: { runId, nodeId: no.id } },
+      create: { runId, nodeId: no.id, nodeType: no.type, ordem: i, status: 'rodando' },
+      update: { status: 'rodando', erro: null, logs: null },
+    });
+
+    const anotar = (m: string) => {
+      linhas.push(m);
+      // Sem await: um log lento nao pode segurar o render.
+      db.runStep
+        .update({
+          where: { runId_nodeId: { runId, nodeId: no.id } },
+          data: { logs: linhas.join('\n') },
+        })
+        .catch(() => {});
+    };
+
     try {
       const resultado = await def.run({
         envelope,
         config,
         runId,
         nodeId: no.id,
-        log: (m) => linhas.push(m),
+        log: anotar,
       });
 
       envelope = resultado.envelope;

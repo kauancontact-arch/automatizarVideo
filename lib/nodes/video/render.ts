@@ -94,13 +94,16 @@ const no: DefinicaoNo<Config> = {
     // Passada 1: um clipe por cena, sequencial. Oito zoompan ao mesmo tempo
     // estouravam a memoria do container e o ffmpeg morria sem escrever erro.
     for (const cena of plano.cenas) {
+      log(`${cena.rotulo}: renderizando...`);
+      const t0 = Date.now();
       await rodarFfmpeg(cena.args, cena.rotulo);
-      log(`${cena.rotulo} pronta`);
+      log(`${cena.rotulo}: pronta em ${((Date.now() - t0) / 1000).toFixed(1)}s`);
     }
 
     // Passada 2: concatena sem re-escalar, queima a legenda e mixa o audio.
     await writeFile(plano.listaPath, plano.listaConteudo, 'utf8');
     await writeFile(plano.filtroFinalPath, plano.filtroFinal, 'utf8');
+    log('montagem final: concatenando, legenda e audio...');
     await rodarFfmpeg(plano.finalArgs, 'montagem final');
 
     const segundosCpu = (Date.now() - comecou) / 1000;

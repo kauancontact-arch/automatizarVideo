@@ -45,7 +45,15 @@ export function PainelRun({
       }
     };
     es.onerror = () => es.close();
-    return () => es.close();
+
+    // Os logs de cada passo so chegam numa carga nova da pagina; enquanto o
+    // run anda, recarrega de tempos em tempos para o progresso aparecer.
+    const recarga = setInterval(() => window.location.reload(), 20000);
+
+    return () => {
+      es.close();
+      clearInterval(recarga);
+    };
   }, [runId, status]);
 
   async function acao(caminho: string, corpo?: unknown) {
