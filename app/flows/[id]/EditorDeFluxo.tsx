@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SeletorDeVoz } from './SeletorDeVoz';
+import { SeletorDeCanais } from './SeletorDeCanais';
 
 type No = { id: string; type: string; rotulo: string; config: Record<string, unknown> };
 type Template = { id: string; nome: string; tipo: string };
+type NoDisponivel = { type: string; rotulo: string; padrao: Record<string, unknown> };
 
 export function EditorDeFluxo({
   flowId,
@@ -20,10 +22,42 @@ export function EditorDeFluxo({
   templates: Template[];
 }) {
   const [estado, setEstado] = useState(nos);
+  const [ligacoes, setLigacoes] = useState(edges);
   const [aberto, setAberto] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [sujo, setSujo] = useState(false);
   const [erro, setErro] = useState('');
+  const [disponiveis, setDisponiveis] = useState<NoDisponivel[]>([]);
+
+  useEffect(() => {
+    fetch('/api/nodes')
+      .then((r) => r.json())
+      .then(setDisponiveis)
+      .catch(() => {});
+  }, []);
+
+  /** Adiciona no fim e liga ao ultimo no, que e o caso comum. */
+  function adicionar(type: string) {
+    const modelo = disponiveis.find((d) => d.type === type);
+    if (!modelo) return;
+
+    const usados = new Set(estado.map((n) => n.id));
+    let n = estado.length + 1;
+    while (usados.has(`n${n}`)) n++;
+    const novoId = `n${n}`;
+
+    const ultimo = estado.at(-1);
+    setEstado([...estado, { id: novoId, type, rotulo: modelo.rotulo, config: { ...modelo.padrao } }]);
+    if (ultimo) setLigacoes([...ligacoes, [ultimo.id, novoId]]);
+    setAberto(novoId);
+    setSujo(true);
+  }
+
+  function remover(nodeId: string) {
+    setEstado(estado.filter((n) => n.id !== nodeId));
+    setLigacoes(ligacoes.filter(([a, b]) => a !== nodeId && b !== nodeId));
+    setSujo(true);
+  }
 
   function mudarConfig(nodeId: string, chave: string, valor: unknown) {
     setEstado((atual) =>
@@ -40,7 +74,10 @@ export function EditorDeFluxo({
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        graph: { nodes: estado.map((n) => ({ id: n.id, type: n.type, config: n.config })), edges },
+        graph: {
+          nodes: estado.map((n) => ({ id: n.id, type: n.type, config: n.config })),
+          edges: ligacoes,
+        },
       }),
     });
 
@@ -96,6 +133,8 @@ export function EditorDeFluxo({
                 <div style={{ marginTop: 14 }}>
                   {no.type === 'voice.elevenlabs' ? (
                     <CamposDeVoz no={no} mudar={(k, v) => mudarConfig(no.id, k, v)} />
+                  ) : no.type === 'publish.buffer' ? (
+                    <CamposDePublicacao no={no} mudar={(k, v) => mudarConfig(no.id, k, v)} />
                   ) : (
                     <CamposGenericos
                       no={no}
@@ -103,12 +142,79 @@ export function EditorDeFluxo({
                       mudar={(k, v) => mudarConfig(no.id, k, v)}
                     />
                   )}
+
+                  <button
+                    type="button"
+                    className="fraco"
+                    onClick={() => remover(no.id)}
+                    style={{ marginTop: 16, fontSize: 12, padding: '5px 11px' }}
+                  >
+                    Remover este no
+                  </button>
                 </div>
               </div>
             )}
           </div>
         ))}
       </div>
+
+      <div style={{ marginTop: 16 }}>
+        <label className="rotulo">Adicionar no</label>
+        <select
+          value=""
+          onChange={(e) => e.target.value && adicionar(e.target.value)}
+          style={{ ...select, marginTop: 6 }}
+        >
+          <option value="">— escolha um tipo —</option>
+          {disponiveis.map((d) => (
+            <option key={d.type} value={d.type}>
+              {d.rotulo}
+            </option>
+          ))}
+        </select>
+        <p style={{ color: 'var(--fraco)', fontSize: 12, marginTop: 6 }}>
+          Entra no fim, ligado ao ultimo no. Para publicar, adicione "Publicar (Buffer)" depois do
+          render.
+        </p>
+      </div>
+    </>
+  );
+}
+
+function CamposDePublicacao({ no, mudar }: { no: No; mudar: (k: string, v: unknown) => void }) {
+  const c = no.config as Record<string, any>;
+
+  return (
+    <>
+      <SeletorDeCanais
+        valor={Array.isArray(c.channels) ? c.channels : []}
+        aoMudar={(ids) => mudar('channels', ids)}
+      />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginTop: 16 }}>
+        <Campo rotulo="Quando">
+          <select value={c.mode ?? 'agendar'} onChange={(e) => mudar('mode', e.target.value)} style={select}>
+            <option value="agora">Publicar agora</option>
+            <option value="agendar">Agendar para uma data</option>
+            <option value="fila">Proximo horario da fila do Buffer</option>
+          </select>
+        </Campo>
+
+        {c.mode === 'agendar' && (
+          <Campo rotulo="Data e hora">
+            <input
+              type="datetime-local"
+              value={typeof c.quando === 'string' ? c.quando.slice(0, 16) : ''}
+              onChange={(e) => mudar('quando', new Date(e.target.value).toISOString())}
+            />
+          </Campo>
+        )}
+      </div>
+
+      <p style={{ color: 'var(--fraco)', fontSize: 12, marginTop: 12 }}>
+        Agendar confirma o agendamento, nao a publicacao. O run fica em "agendado" e um job confere
+        dez minutos depois do horario se o post saiu mesmo.
+      </p>
     </>
   );
 }
