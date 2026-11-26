@@ -1,5 +1,8 @@
 [phases.setup]
-nixPkgs = ["nodejs_22", "ffmpeg-full", "fontconfig", "openssl"]
+# dejavu_fonts: o container nao tem fonte alguma, e sem uma o filtro
+# subtitles falha com erro que nao diz o motivo. Serve de reserva ate os
+# .ttf de assets/fonts/ (Anton, Montserrat) serem commitados.
+nixPkgs = ["nodejs_22", "ffmpeg-full", "fontconfig", "dejavu_fonts", "openssl"]
 
 # npm install, nao npm ci: o repositorio ainda nao tem package-lock.json.
 # Assim que rodar `npm install` local e commitar o lockfile, troque para

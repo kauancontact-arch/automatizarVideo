@@ -33,9 +33,24 @@ const ALINHAMENTO = { baixo: 2, centro: 5, alto: 8 } as const;
  * Um arquivo .ass em vez de um drawtext por palavra: um video de 45s tem umas
  * 120 palavras, e 120 filtros encadeados ficam lentos e ilegiveis.
  */
-export function montarAss(captions: Caption[], estilo: EstiloLegenda, largura = 1080, altura = 1920): string {
+/**
+ * Se a fonte do template nao estiver instalada, o libass cai numa fonte
+ * qualquer e o video sai com tipografia errada sem avisar. Declarar a reserva
+ * aqui deixa o resultado previsivel ate os .ttf serem commitados.
+ */
+const FONTE_RESERVA = 'DejaVu Sans';
+
+export function montarAss(
+  captions: Caption[],
+  estilo: EstiloLegenda,
+  largura = 1080,
+  altura = 1920,
+  fontesDisponiveis?: string[],
+): string {
   const destaque = hexParaAss(estilo.destaque);
   const branco = '&H00FFFFFF';
+  const fonte =
+    !fontesDisponiveis || fontesDisponiveis.includes(estilo.fonte) ? estilo.fonte : FONTE_RESERVA;
 
   const cabecalho = [
     '[Script Info]',
@@ -46,7 +61,7 @@ export function montarAss(captions: Caption[], estilo: EstiloLegenda, largura = 
     '',
     '[V4+ Styles]',
     'Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
-    `Style: Viral,${estilo.fonte},${estilo.tamanho},${branco},&H00000000,&H00000000,-1,0,1,${estilo.contorno},0,${ALINHAMENTO[estilo.posicao]},80,80,${estilo.posicao === 'baixo' ? 220 : 0},1`,
+    `Style: Viral,${fonte},${estilo.tamanho},${branco},&H00000000,&H00000000,-1,0,1,${estilo.contorno},0,${ALINHAMENTO[estilo.posicao]},80,80,${estilo.posicao === 'baixo' ? 220 : 0},1`,
     '',
     '[Events]',
     'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
