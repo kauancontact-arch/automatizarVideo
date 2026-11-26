@@ -52,6 +52,25 @@ export type PlanoRender = {
  * concatena sem re-escalar, aplica a legenda e mixa o audio. A memoria passa
  * a ser a de uma cena so, nao a de todas.
  */
+/**
+ * O x264 le a contagem de CPUs da maquina hospedeira, nao o limite do cgroup
+ * do container. Num host de 60 nucleos ele abre 60 threads de codificacao e
+ * 15 de lookahead, cada uma com seus buffers de quadro, e estoura a memoria
+ * antes de codificar o primeiro quadro.
+ *
+ * Travar o numero de threads e o que resolve de fato a morte por OOM; a
+ * resolucao quase nao importa perto disso.
+ */
+const THREADS = Math.max(1, Number(process.env.FFMPEG_THREADS ?? 2));
+
+const LIMITE_THREADS = [
+  '-threads', String(THREADS),
+  '-filter_threads', String(THREADS),
+  '-filter_complex_threads', String(THREADS),
+];
+
+const X264_PARAMS = `threads=${THREADS}:lookahead_threads=1:sliced_threads=0`;
+
 export function montarPlano(e: EntradaRender, t: TemplateVideo): PlanoRender {
   const largura = e.largura ?? 1080;
   const altura = e.altura ?? 1920;
@@ -82,6 +101,7 @@ export function montarPlano(e: EntradaRender, t: TemplateVideo): PlanoRender {
       saida,
       args: [
         '-y',
+        ...LIMITE_THREADS,
         '-loop', '1',
         '-t', dur.toFixed(3),
         '-i', img,
@@ -90,6 +110,7 @@ export function montarPlano(e: EntradaRender, t: TemplateVideo): PlanoRender {
         '-c:v', 'libx264',
         '-preset', 'veryfast',
         '-crf', '18',
+        '-x264-params', X264_PARAMS,
         '-r', String(fps),
         '-an',
         saida,
@@ -120,6 +141,7 @@ export function montarPlano(e: EntradaRender, t: TemplateVideo): PlanoRender {
 
   const finalArgs = [
     '-y',
+    ...LIMITE_THREADS,
     '-f', 'concat',
     '-safe', '0',
     '-i', listaPath,
@@ -131,6 +153,7 @@ export function montarPlano(e: EntradaRender, t: TemplateVideo): PlanoRender {
     '-c:v', 'libx264',
     '-preset', 'veryfast',
     '-crf', '21',
+    '-x264-params', X264_PARAMS,
     '-pix_fmt', 'yuv420p',
     '-r', String(fps),
     '-c:a', 'aac',
@@ -143,6 +166,7 @@ export function montarPlano(e: EntradaRender, t: TemplateVideo): PlanoRender {
   const filtroFinal = partes.join(';\n');
 
   const textoDoComando = [
+    `--- ${THREADS} threads por processo (x264 ignora o limite do cgroup) ---`,
     '--- passada 1: uma cena por vez ---',
     ...cenas.map((c) => `ffmpeg ${c.args.join(' ')}`),
     '',

@@ -146,7 +146,8 @@ async function rodarFfmpeg(args: string[], rotulo: string): Promise<void> {
     if (erro.signal === 'SIGKILL' || erro.code === 137) {
       throw new Error(
         `${rotulo}: o ffmpeg foi morto pelo sistema, quase sempre falta de memoria. ` +
-          `Reduza a resolucao para 720x1280 no no de render, ou de mais RAM ao servico.\n${fim}`,
+          `Baixe FFMPEG_THREADS (esta em ${process.env.FFMPEG_THREADS ?? 2}), ` +
+          `reduza a resolucao para 720x1280 no no de render, ou de mais RAM ao servico.\n${fim}`,
       );
     }
 
