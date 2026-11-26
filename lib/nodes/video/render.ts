@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { db } from '@/lib/db';
 import { montarAss } from '@/lib/ffmpeg/ass';
 import { montarPlano, type TemplateVideo } from '@/lib/ffmpeg/build';
-import { conferir, sondar } from '@/lib/ffmpeg/probe';
+import { conferir, fontesInstaladas, sondar } from '@/lib/ffmpeg/probe';
 import { pastaDoRun } from '@/lib/ffmpeg/paths';
 import { subir } from '@/lib/providers/storage';
 import { limparDepoisDoRender } from '@/lib/ffmpeg/limpeza';
@@ -68,7 +68,14 @@ const no: DefinicaoNo<Config> = {
     const duracoes = distribuir(duracaoAudio, imagens.length, cenas.map((c) => c.segundos));
 
     const assPath = join(pasta, 'legenda.ass');
-    await writeFile(assPath, montarAss(captions, t.legenda, ...dimensoes(config.resolucao)), 'utf8');
+    const [larg, alt] = dimensoes(config.resolucao);
+    const fontes = await fontesInstaladas();
+
+    if (fontes.length && !fontes.includes(t.legenda.fonte)) {
+      log(`fonte "${t.legenda.fonte}" nao esta instalada; usando a reserva`);
+    }
+
+    await writeFile(assPath, montarAss(captions, t.legenda, larg, alt, fontes), 'utf8');
 
     const saidaPath = join(pasta, 'saida.mp4');
     const [largura, altura] = dimensoes(config.resolucao);

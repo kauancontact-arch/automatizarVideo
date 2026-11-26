@@ -14,6 +14,27 @@ export type Sonda = {
   bytes: number;
 };
 
+/**
+ * Familias de fonte que o fontconfig enxerga neste container. Sem isto o
+ * fallback do gerador de legenda nunca era acionado: ele recebia undefined e
+ * aceitava qualquer nome de fonte, instalada ou nao.
+ */
+export async function fontesInstaladas(): Promise<string[]> {
+  try {
+    const { stdout } = await run('fc-list', [':', 'family']);
+    const familias = new Set<string>();
+    for (const linha of stdout.split('\n')) {
+      for (const nome of linha.split(',')) {
+        const limpo = nome.trim();
+        if (limpo) familias.add(limpo);
+      }
+    }
+    return [...familias];
+  } catch {
+    return [];
+  }
+}
+
 export async function sondar(caminho: string): Promise<Sonda> {
   const { stdout } = await run('ffprobe', [
     '-v', 'error',

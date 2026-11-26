@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { NOS } from '@/lib/engine/registry';
+import { descreverCampos } from '@/lib/engine/campos';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,7 @@ export async function GET() {
         type: n.type,
         rotulo: n.rotulo,
         padrao: r.success ? (r.data as Record<string, unknown>) : {},
+        campos: descreverCampos(n.schema as never),
       };
     }),
   );

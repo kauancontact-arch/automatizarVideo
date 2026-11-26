@@ -6,7 +6,17 @@ import { SeletorDeCanais } from './SeletorDeCanais';
 
 type No = { id: string; type: string; rotulo: string; config: Record<string, unknown> };
 type Template = { id: string; nome: string; tipo: string };
-type NoDisponivel = { type: string; rotulo: string; padrao: Record<string, unknown> };
+type Campo = {
+  nome: string;
+  tipo: 'texto' | 'numero' | 'booleano' | 'lista' | 'escolha';
+  opcoes?: string[];
+  padrao?: unknown;
+  obrigatorio: boolean;
+  min?: number;
+  max?: number;
+  descricao?: string;
+};
+type NoDisponivel = { type: string; rotulo: string; padrao: Record<string, unknown>; campos: Campo[] };
 
 export function EditorDeFluxo({
   flowId,
@@ -138,6 +148,7 @@ export function EditorDeFluxo({
                   ) : (
                     <CamposGenericos
                       no={no}
+                      campos={disponiveis.find((d) => d.type === no.type)?.campos ?? []}
                       templates={templates}
                       mudar={(k, v) => mudarConfig(no.id, k, v)}
                     />
@@ -253,57 +264,108 @@ function CamposDeVoz({ no, mudar }: { no: No; mudar: (k: string, v: unknown) => 
 
 function CamposGenericos({
   no,
+  campos,
   templates,
   mudar,
 }: {
   no: No;
+  campos: Campo[];
   templates: Template[];
   mudar: (k: string, v: unknown) => void;
 }) {
   const c = no.config as Record<string, any>;
   const tipoTemplate = no.type === 'script.generate' ? 'roteiro' : no.type === 'video.render' ? 'video' : null;
 
+  // Desenha a partir do schema, nao dos valores: um no recem-adicionado nao
+  // tem valor nenhum e apareceria sem campos.
+  const lista = campos.length
+    ? campos
+    : Object.keys(c).map((nome) => ({ nome, tipo: 'texto' as const, obrigatorio: false }));
+
+  if (lista.length === 0) {
+    return <p style={{ color: 'var(--fraco)', fontSize: 13 }}>Este no nao tem o que configurar.</p>;
+  }
+
   return (
     <div style={{ display: 'grid', gap: 12 }}>
-      {tipoTemplate && (
-        <Campo rotulo="Template">
-          <select value={c.templateId ?? ''} onChange={(e) => mudar('templateId', e.target.value)} style={select}>
-            <option value="">— nenhum —</option>
-            {templates
-              .filter((t) => t.tipo === tipoTemplate)
-              .map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.nome}
-                </option>
-              ))}
-          </select>
-        </Campo>
-      )}
+      {lista.map((campo) => {
+        if (campo.nome === 'templateId' && tipoTemplate) {
+          return (
+            <Campo key={campo.nome} rotulo="Template">
+              <select value={c.templateId ?? ''} onChange={(e) => mudar('templateId', e.target.value)} style={select}>
+                <option value="">— nenhum —</option>
+                {templates
+                  .filter((t) => t.tipo === tipoTemplate)
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.nome}
+                    </option>
+                  ))}
+              </select>
+            </Campo>
+          );
+        }
 
-      {Object.entries(c)
-        .filter(([k]) => k !== 'templateId')
-        .map(([chave, valor]) => (
-          <Campo key={chave} rotulo={chave}>
-            {typeof valor === 'boolean' ? (
+        const valor = c[campo.nome] ?? campo.padrao ?? '';
+        const rotulo = campo.obrigatorio ? `${campo.nome} *` : campo.nome;
+
+        return (
+          <Campo key={campo.nome} rotulo={rotulo}>
+            {campo.tipo === 'escolha' ? (
+              <select value={String(valor)} onChange={(e) => mudar(campo.nome, e.target.value)} style={select}>
+                {(campo.opcoes ?? []).map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+            ) : campo.tipo === 'booleano' ? (
               <input
                 type="checkbox"
-                checked={valor}
-                onChange={(e) => mudar(chave, e.target.checked)}
+                checked={Boolean(valor)}
+                onChange={(e) => mudar(campo.nome, e.target.checked)}
                 style={{ width: 'auto' }}
               />
-            ) : typeof valor === 'number' ? (
-              <input type="number" value={valor} onChange={(e) => mudar(chave, Number(e.target.value))} />
-            ) : Array.isArray(valor) ? (
+            ) : campo.tipo === 'numero' ? (
               <input
-                value={valor.join(', ')}
-                onChange={(e) => mudar(chave, e.target.value.split(',').map((s) => s.trim()).filter(Boolean))}
+                type="number"
+                min={campo.min}
+                max={campo.max}
+                value={valor === '' ? '' : Number(valor)}
+                onChange={(e) => mudar(campo.nome, e.target.value === '' ? undefined : Number(e.target.value))}
+              />
+            ) : campo.tipo === 'lista' ? (
+              <input
+                value={Array.isArray(valor) ? valor.join(', ') : ''}
+                onChange={(e) =>
+                  mudar(
+                    campo.nome,
+                    e.target.value.split(',').map((x) => x.trim()).filter(Boolean),
+                  )
+                }
                 placeholder="separado por virgula"
               />
             ) : (
-              <input value={String(valor ?? '')} onChange={(e) => mudar(chave, e.target.value)} />
+              <input
+                value={String(valor)}
+                onChange={(e) => mudar(campo.nome, e.target.value)}
+                placeholder={campo.nome === 'cron' ? '0 9,18 * * *' : undefined}
+              />
+            )}
+
+            {campo.descricao && (
+              <p style={{ color: 'var(--fraco)', fontSize: 12, marginTop: 4 }}>{campo.descricao}</p>
             )}
           </Campo>
-        ))}
+        );
+      })}
+
+      {no.type === 'trigger.schedule' && (
+        <p style={{ color: 'var(--fraco)', fontSize: 12 }}>
+          Formato: minuto hora dia mes diaDaSemana. <code>0 9,18 * * *</code> dispara as 9h e as 18h
+          todos os dias. O fluxo precisa estar ativo para o cron valer.
+        </p>
+      )}
     </div>
   );
 }
