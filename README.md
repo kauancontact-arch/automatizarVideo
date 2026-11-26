@@ -29,6 +29,9 @@ Tres servicos no mesmo projeto, a partir deste repositorio:
 | postgres | plugin do Railway        | -       |
 
 O `worker` precisa de um volume montado em `/data` e de 2 GB de RAM.
+
+A voz da narracao e escolhida na interface, em Fluxos > o fluxo > no de
+narracao: a lista vem da sua conta do ElevenLabs, com previa de audio.
 As variaveis de ambiente estao em `.env.example` — preencha as duas primeiras
 secoes em ambos os servicos.
 

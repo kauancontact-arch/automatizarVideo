@@ -6,7 +6,7 @@ import { pastaDoRun } from '@/lib/ffmpeg/paths';
 import type { DefinicaoNo } from '@/lib/engine/registry';
 
 const schema = z.object({
-  voiceId: z.string().min(8),
+  voiceId: z.string().default(''),
   modelId: z.enum(['eleven_turbo_v2_5', 'eleven_multilingual_v2']).default('eleven_turbo_v2_5'),
   stability: z.number().min(0).max(1).default(0.4),
   similarityBoost: z.number().min(0).max(1).default(0.75),
@@ -30,6 +30,7 @@ const no: DefinicaoNo<Config> = {
   async run({ envelope, config, runId, log }) {
     const texto = textoDoRoteiro(envelope);
     if (!texto) throw new Error('nao ha roteiro para narrar');
+    if (!config.voiceId) throw new Error('nenhuma voz escolhida: abra o fluxo e escolha a voz no no de narracao');
 
     const r = await narrar({ texto, ...config });
     log(`${r.caracteres} caracteres, ${r.captions.length} palavras alinhadas`);

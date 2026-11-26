@@ -31,7 +31,7 @@ export default async function Flows() {
           <tbody>
             {flows.map((f) => (
               <tr key={f.id}>
-                <td>{f.nome}</td>
+                <td><a href={`/flows/${f.id}`}>{f.nome}</a></td>
                 <td>
                   <span className={`marca ${f.ativo ? 'publicado' : ''}`}>{f.ativo ? 'ativo' : 'pausado'}</span>
                 </td>

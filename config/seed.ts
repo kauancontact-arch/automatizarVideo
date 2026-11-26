@@ -56,7 +56,7 @@ async function main() {
           {
             id: 'n4',
             type: 'voice.elevenlabs',
-            config: { voiceId: 'TROQUE_PELO_SEU_VOICE_ID', modelId: 'eleven_turbo_v2_5', speed: 1.06 },
+            config: { voiceId: '', modelId: 'eleven_turbo_v2_5', speed: 1.06 },
           },
           { id: 'n5', type: 'image.generate', config: { modelo: 'gpt-image-1-mini', quality: 'low' } },
           { id: 'n6', type: 'video.render', config: { templateId: videos[0].id, resolucao: '1080x1920', fps: 30 } },
@@ -74,7 +74,7 @@ async function main() {
   });
 
   console.log(`fluxo de exemplo criado: ${flow.id}`);
-  console.log('troque TROQUE_PELO_SEU_VOICE_ID pelo voice_id da sua voz antes de rodar');
+  console.log('abra o fluxo na interface e escolha a voz antes de rodar');
 }
 
 main()
