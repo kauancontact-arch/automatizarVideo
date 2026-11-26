@@ -278,9 +278,9 @@ function CamposGenericos({
 
   // Desenha a partir do schema, nao dos valores: um no recem-adicionado nao
   // tem valor nenhum e apareceria sem campos.
-  const lista = campos.length
+  const lista: Campo[] = campos.length
     ? campos
-    : Object.keys(c).map((nome) => ({ nome, tipo: 'texto' as const, obrigatorio: false }));
+    : Object.keys(c).map((nome) => ({ nome, tipo: 'texto', obrigatorio: false }));
 
   if (lista.length === 0) {
     return <p style={{ color: 'var(--fraco)', fontSize: 13 }}>Este no nao tem o que configurar.</p>;
