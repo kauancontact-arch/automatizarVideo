@@ -12,24 +12,39 @@ export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) 
   const { id } = await ctx.params;
   const encoder = new TextEncoder();
 
+  let timer: ReturnType<typeof setInterval> | undefined;
+  let fechado = false;
+
   const stream = new ReadableStream({
-    async start(controller) {
+    start(controller) {
       let anterior = '';
       let voltas = 0;
 
-      const timer = setInterval(async () => {
+      // Fechar e idempotente: o navegador pode sumir no meio de uma volta, e
+      // enfileirar num controller ja fechado derruba o processo inteiro com
+      // unhandledRejection.
+      const encerrar = () => {
+        if (fechado) return;
+        fechado = true;
+        if (timer) clearInterval(timer);
+        try {
+          controller.close();
+        } catch {
+          // ja estava fechado
+        }
+      };
+
+      timer = setInterval(async () => {
+        if (fechado) return;
         voltas++;
+
         try {
           const run = await db.run.findUnique({
             where: { id },
             include: { steps: { orderBy: { ordem: 'asc' } } },
           });
 
-          if (!run) {
-            clearInterval(timer);
-            controller.close();
-            return;
-          }
+          if (!run) return encerrar();
 
           const atual = JSON.stringify({
             status: run.status,
@@ -40,19 +55,25 @@ export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) 
 
           if (atual !== anterior) {
             anterior = atual;
-            controller.enqueue(encoder.encode(`data: ${atual}\n\n`));
+            try {
+              controller.enqueue(encoder.encode(`data: ${atual}\n\n`));
+            } catch {
+              return encerrar();
+            }
           }
 
           // 10 minutos cobrem o run mais lento com folga.
-          if (FINAIS.has(run.status) || voltas > 300) {
-            clearInterval(timer);
-            controller.close();
-          }
+          if (FINAIS.has(run.status) || voltas > 300) encerrar();
         } catch {
-          clearInterval(timer);
-          controller.close();
+          encerrar();
         }
       }, 2000);
+    },
+
+    // Chamado quando o navegador desconecta.
+    cancel() {
+      fechado = true;
+      if (timer) clearInterval(timer);
     },
   });
 
