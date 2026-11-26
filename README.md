@@ -28,7 +28,8 @@ Tres servicos no mesmo projeto, a partir deste repositorio:
 | worker   | `npm run worker:start`   | nao     |
 
 Em um slot so (plano gratuito), suba apenas `web` com `WORKER_IN_PROCESS=true`:
-a fila e o cron rodam dentro dele. Um render pesado ocupa a CPU que serve as
+`start.sh` sobe a interface e o worker como dois processos no mesmo container,
+e derruba os dois se qualquer um cair. Um render pesado ocupa a CPU que serve as
 telas, o que e aceitavel ate uns poucos videos por dia.
 | postgres | plugin do Railway        | -       |
 

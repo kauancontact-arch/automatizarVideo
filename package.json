@@ -5,12 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "next start -p ${PORT:-3000}",
+    "start": "bash start.sh",
     "worker": "tsx worker/index.ts",
     "worker:start": "tsx worker/index.ts",
     "db:push": "prisma db push",
     "db:seed": "tsx config/seed.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "start:web": "next start -p ${PORT:-3000}"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",
