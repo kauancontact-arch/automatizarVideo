@@ -69,12 +69,17 @@ const no: DefinicaoNo<Config> = {
         break;
       }
 
-      log(`tentativa ${n + 1}: ${problemas.map((p) => p.detalhe).join('; ')}`);
+      log(`tentativa ${n + 1} de ${TENTATIVAS} rejeitada: ${problemas.map((p) => p.detalhe).join('; ')}`);
       correcao = `\n\nCorrija na proxima versao: ${problemas.map((p) => p.detalhe).join('; ')}`;
     }
 
     // Roteiro ruim que segue adiante vira narracao paga e render pago.
-    if (!roteiro) throw new Error(`roteiro nao passou na validacao em ${TENTATIVAS} tentativas`);
+    if (!roteiro) {
+      throw new Error(
+        `roteiro nao passou na validacao em ${TENTATIVAS} tentativas. ` +
+          `Veja os logs do passo para o motivo de cada uma.`,
+      );
+    }
 
     return {
       envelope: {

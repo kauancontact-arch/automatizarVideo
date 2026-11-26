@@ -91,6 +91,7 @@ export async function executarRun(runId: string, opcoes: OpcoesExecucao = {}): P
             quantidade: resultado.uso ? decimal(resultado.uso.quantidade) : undefined,
             custoUsd: decimal(usd),
             comando: resultado.comando,
+            logs: linhas.join('\n') || null,
             duracaoMs: Date.now() - comecou,
           },
           update: {
@@ -98,6 +99,7 @@ export async function executarRun(runId: string, opcoes: OpcoesExecucao = {}): P
             saida: envelope as any,
             custoUsd: decimal(usd),
             comando: resultado.comando,
+            logs: linhas.join('\n') || null,
             erro: null,
             duracaoMs: Date.now() - comecou,
           },
@@ -128,9 +130,15 @@ export async function executarRun(runId: string, opcoes: OpcoesExecucao = {}): P
             ordem: i,
             status: 'falhou',
             erro: msg,
+            logs: linhas.join('\n') || null,
             duracaoMs: Date.now() - comecou,
           },
-          update: { status: 'falhou', erro: msg, duracaoMs: Date.now() - comecou },
+          update: {
+            status: 'falhou',
+            erro: msg,
+            logs: linhas.join('\n') || null,
+            duracaoMs: Date.now() - comecou,
+          },
         }),
         db.run.update({ where: { id: runId }, data: { status: 'falhou', erro: msg, terminadoEm: new Date() } }),
       ]);

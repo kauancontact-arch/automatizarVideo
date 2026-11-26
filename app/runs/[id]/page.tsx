@@ -37,6 +37,7 @@ export default async function Run(ctx: { params: Promise<{ id: string }> }) {
           quantidade: s.quantidade ? Number(s.quantidade) : null,
           duracaoMs: s.duracaoMs,
           erro: s.erro,
+          logs: s.logs,
         }))}
       />
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 
 type Step = {
   nodeId: string;
@@ -11,6 +11,7 @@ type Step = {
   quantidade: number | null;
   duracaoMs: number | null;
   erro: string | null;
+  logs: string | null;
 };
 
 const FINAIS = new Set(['publicado', 'falhou', 'bloqueado_por_custo', 'aguardando_aprovacao', 'agendado']);
@@ -97,17 +98,31 @@ export function PainelRun({
           </thead>
           <tbody>
             {steps.map((s) => (
-              <tr key={s.nodeId}>
-                <td>
-                  {s.nodeId} <span style={{ color: 'var(--fraco)' }}>{s.nodeType}</span>
-                </td>
-                <td>
-                  <span className={`marca ${s.status === 'ok' ? 'publicado' : 'falhou'}`}>{s.status}</span>
-                </td>
-                <td>{s.quantidade != null ? `${s.quantidade.toFixed(0)} ${s.unidade}` : '—'}</td>
-                <td>US$ {s.custoUsd.toFixed(4)}</td>
-                <td>{s.duracaoMs != null ? `${(s.duracaoMs / 1000).toFixed(1)}s` : '—'}</td>
-              </tr>
+              <Fragment key={s.nodeId}>
+                <tr>
+                  <td>
+                    {s.nodeId} <span style={{ color: 'var(--fraco)' }}>{s.nodeType}</span>
+                  </td>
+                  <td>
+                    <span className={`marca ${s.status === 'ok' ? 'publicado' : 'falhou'}`}>{s.status}</span>
+                  </td>
+                  <td>{s.quantidade != null ? `${s.quantidade.toFixed(0)} ${s.unidade}` : '—'}</td>
+                  <td>US$ {s.custoUsd.toFixed(4)}</td>
+                  <td>{s.duracaoMs != null ? `${(s.duracaoMs / 1000).toFixed(1)}s` : '—'}</td>
+                </tr>
+                {(s.logs || s.erro) && (
+                  <tr>
+                    <td colSpan={5} style={{ paddingTop: 0 }}>
+                      {s.erro && (
+                        <div style={{ color: 'var(--erro)', fontSize: 13, marginBottom: 6 }}>{s.erro}</div>
+                      )}
+                      {s.logs && (
+                        <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{s.logs}</pre>
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </tbody>
         </table>

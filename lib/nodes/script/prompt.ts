@@ -26,6 +26,13 @@ export const SCHEMA_ROTEIRO = {
   },
 } as const;
 
+/** Caracteres falados por segundo, em narracao de video curto em portugues. */
+export const CHARS_POR_SEGUNDO = 15;
+
+export function cenasAlvo(duracao: number): number {
+  return Math.min(10, Math.max(3, Math.round(duracao / 6)));
+}
+
 export function montarSistema(p: {
   idioma: string;
   nicho: string;
@@ -37,6 +44,10 @@ export function montarSistema(p: {
   evitar: string[];
   exemplos: string[];
 }): string {
+  const cenas = cenasAlvo(p.duracao);
+  const totalChars = Math.round(p.duracao * CHARS_POR_SEGUNDO);
+  const porCena = Math.round((totalChars * 0.8) / cenas);
+
   return [
     `Voce escreve roteiros para video vertical curto em ${p.idioma}.`,
     '',
@@ -49,14 +60,16 @@ export function montarSistema(p: {
     p.estrutura,
     '',
     'Regras:',
-    '- O gancho e a primeira frase e cabe em 3 segundos falados.',
-    '- Cada cena tem UMA ideia e de 3 a 5 segundos de fala.',
+    `- Tudo o que esta em hook, scenes[].text e cta e NARRADO. Somados, devem dar`,
+    `  cerca de ${totalChars} caracteres (${p.duracao} segundos de fala).`,
+    `- Escreva exatamente ${cenas} cenas, de cerca de ${porCena} caracteres cada.`,
+    '- O gancho e uma frase so e cabe em 3 segundos falados.',
+    '- O campo segundos de cada cena e a estimativa de fala daquela cena.',
     '- Fala falada, nao escrita: frases curtas, sem subordinada longa.',
     '- O campo visual descreve UMA imagem concreta e estatica, em uma frase,',
     '  sem texto na imagem e sem pessoas reconheciveis.',
     '- Mantenha o mesmo sujeito visual entre as cenas para a serie ter unidade.',
     p.evitar.length ? `- Nunca escreva: ${p.evitar.join(', ')}` : '- Sem palavras proibidas.',
-    `- Total de fala: cerca de ${Math.round(p.duracao * 15)} caracteres.`,
     '',
     p.exemplos.length
       ? ['Exemplos aprovados, imite o ritmo e o vocabulario, nunca o tema:', ...p.exemplos].join('\n')
@@ -75,20 +88,34 @@ export type RoteiroGerado = {
 
 export type Problema = { campo: string; detalhe: string };
 
-/** O modelo respeita o schema e ignora a duracao. Estas checagens pegam isso. */
+export function textoFalado(r: RoteiroGerado): string {
+  return [r.hook, ...r.scenes.map((c) => c.text), r.cta].filter(Boolean).join(' ');
+}
+
+/**
+ * O que importa e o tamanho do texto falado, porque e ele que determina a
+ * duracao do audio. Os segundos declarados por cena sao so peso para repartir
+ * as imagens, entao nao valem uma rejeicao.
+ */
 export function validar(r: RoteiroGerado, duracaoAlvo: number, evitar: string[]): Problema[] {
   const problemas: Problema[] = [];
 
-  const soma = r.scenes.reduce((s, c) => s + c.segundos, 0);
-  const desvio = Math.abs(soma - duracaoAlvo) / duracaoAlvo;
-  if (desvio > 0.2) {
+  const chars = textoFalado(r).length;
+  const alvo = duracaoAlvo * CHARS_POR_SEGUNDO;
+  const desvio = Math.abs(chars - alvo) / alvo;
+
+  if (desvio > 0.3) {
+    const segundos = Math.round(chars / CHARS_POR_SEGUNDO);
     problemas.push({
-      campo: 'segundos',
-      detalhe: `a soma das cenas deu ${soma.toFixed(1)}s, fora de 20% dos ${duracaoAlvo}s pedidos`,
+      campo: 'tamanho',
+      detalhe:
+        `o texto falado tem ${chars} caracteres (~${segundos}s), e o alvo e ` +
+        `${Math.round(alvo)} (~${duracaoAlvo}s): ${chars > alvo ? 'corte' : 'acrescente'} ` +
+        `cerca de ${Math.abs(chars - Math.round(alvo))} caracteres`,
     });
   }
 
-  const falado = [r.hook, ...r.scenes.map((c) => c.text), r.cta].join(' ').toLowerCase();
+  const falado = textoFalado(r).toLowerCase();
   for (const palavra of evitar) {
     if (palavra && falado.includes(palavra.toLowerCase())) {
       problemas.push({ campo: 'evitar', detalhe: `a palavra proibida "${palavra}" aparece no texto falado` });

@@ -59,6 +59,7 @@ model RunStep {
   quantidade Decimal? @db.Decimal(14, 4)
   custoUsd   Decimal  @default(0) @db.Decimal(10, 6)
   comando    String?
+  logs       String?
   erro       String?
   duracaoMs  Int?
   criadoEm   DateTime @default(now())
