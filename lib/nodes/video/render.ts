@@ -9,6 +9,7 @@ import { montarPlano, type TemplateVideo } from '@/lib/ffmpeg/build';
 import { conferir, sondar } from '@/lib/ffmpeg/probe';
 import { pastaDoRun } from '@/lib/ffmpeg/paths';
 import { subir } from '@/lib/providers/storage';
+import { limparDepoisDoRender } from '@/lib/ffmpeg/limpeza';
 import type { DefinicaoNo } from '@/lib/engine/registry';
 
 const run = promisify(execFile);
@@ -120,6 +121,9 @@ const no: DefinicaoNo<Config> = {
     if (problemas.length) throw new Error(`video reprovado na validacao: ${problemas.join('; ')}`);
 
     const url = await subir(saidaPath, `videos/${runId}.mp4`, 'video/mp4');
+
+    // Os clipes por cena ja cumpriram o papel; so o mp4 final precisa ficar.
+    await limparDepoisDoRender(pasta);
 
     return {
       envelope: {

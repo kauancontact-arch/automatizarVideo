@@ -5,6 +5,7 @@ import { executarRun } from '@/lib/engine/run';
 import { lerGrafo } from '@/lib/engine/graph';
 import { verificarPublicacoes } from './jobs/verify-publish';
 import { sincronizarUso } from './jobs/usage-sync';
+import { limparIntermediarios, limparRunsAntigos } from '@/lib/ffmpeg/limpeza';
 
 const agendados = new Map<string, CronJob>();
 let jaIniciou = false;
@@ -70,6 +71,15 @@ export async function iniciarWorker(): Promise<void> {
   jaIniciou = true;
 
   console.log('[worker] iniciando');
+
+  // Render de video enche disco rapido, e disco cheio aparece como ENOSPC em
+  // qualquer lugar, nao no render. Limpa antes de aceitar trabalho.
+  const intermediarios = await limparIntermediarios();
+  const antigos = await limparRunsAntigos(48);
+  if (intermediarios || antigos) {
+    console.log(`[limpeza] ${intermediarios} intermediarios, ${antigos} pastas antigas`);
+  }
+
   const boss = await fila();
 
   await boss.work<{ runId: string; retomar?: boolean }>(FILA_RUN, { batchSize: 1 }, async ([job]) => {
@@ -84,6 +94,10 @@ export async function iniciarWorker(): Promise<void> {
   new CronJob('*/2 * * * *', recarregarAgendamentos, null, true);
   new CronJob('*/5 * * * *', verificarPublicacoes, null, true);
   new CronJob('0 * * * *', sincronizarUso, null, true);
+  new CronJob('30 */6 * * *', async () => {
+    const n = await limparRunsAntigos(48);
+    if (n) console.log(`[limpeza] ${n} pastas antigas`);
+  }, null, true);
 
   console.log('[worker] pronto');
 }

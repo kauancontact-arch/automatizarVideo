@@ -41,10 +41,23 @@ export default async function Run(ctx: { params: Promise<{ id: string }> }) {
         }))}
       />
 
-      {envelope?.video?.url && !String(envelope.video.url).startsWith('file://') && (
+      {envelope?.video && (
         <>
           <h2>Video</h2>
-          <video src={envelope.video.url} controls style={{ width: 300, borderRadius: 10 }} />
+          <video
+            src={
+              String(envelope.video.url ?? '').startsWith('http')
+                ? envelope.video.url
+                : `/api/runs/${run.id}/video`
+            }
+            controls
+            style={{ width: 300, borderRadius: 10 }}
+          />
+          <p style={{ color: 'var(--fraco)', fontSize: 12 }}>
+            <a href={`/api/runs/${run.id}/video`} download={`${run.id}.mp4`}>
+              baixar mp4
+            </a>
+          </p>
         </>
       )}
 
