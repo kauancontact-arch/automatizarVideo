@@ -1,8 +1,11 @@
 [phases.setup]
 nixPkgs = ["nodejs_22", "ffmpeg-full", "fontconfig", "openssl"]
 
+# npm install, nao npm ci: o repositorio ainda nao tem package-lock.json.
+# Assim que rodar `npm install` local e commitar o lockfile, troque para
+# `npm ci --include=dev`, que e mais rapido e reproduzivel.
 [phases.install]
-cmds = ["npm ci --include=dev"]
+cmds = ["npm install --no-audit --no-fund"]
 
 [phases.build]
 cmds = ["npm run build"]
