@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Flow {
+  id       String   @id @default(cuid())
+  nome     String
+  graph    Json
+  ativo    Boolean  @default(false)
+  segredo  String   @default(cuid())
+  criadoEm DateTime @default(now())
+  runs     Run[]
+}
+
+enum RunStatus {
+  fila
+  rodando
+  aguardando_aprovacao
+  agendado
+  publicado
+  falhou
+  bloqueado_por_custo
+}
+
+model Run {
+  id          String    @id @default(cuid())
+  flow        Flow      @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  flowId      String
+  status      RunStatus @default(fila)
+  templateId  String?
+  custoUsd    Decimal   @default(0) @db.Decimal(10, 6)
+  envelope    Json?
+  erro        String?
+  publicadoEm DateTime?
+  iniciadoEm  DateTime  @default(now())
+  terminadoEm DateTime?
+  steps       RunStep[]
+
+  @@index([status, iniciadoEm])
+  @@index([flowId, iniciadoEm])
+}
+
+model RunStep {
+  id         String   @id @default(cuid())
+  run        Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId      String
+  nodeId     String
+  nodeType   String
+  ordem      Int
+  status     String
+  entrada    Json?
+  saida      Json?
+  unidade    String?
+  quantidade Decimal? @db.Decimal(14, 4)
+  custoUsd   Decimal  @default(0) @db.Decimal(10, 6)
+  comando    String?
+  erro       String?
+  duracaoMs  Int?
+  criadoEm   DateTime @default(now())
+
+  @@unique([runId, nodeId])
+  @@index([runId, ordem])
+}
+
+enum TemplateTipo {
+  roteiro
+  video
+}
+
+model Template {
+  id        String       @id @default(cuid())
+  nome      String
+  tipo      TemplateTipo
+  definicao Json
+  criadoEm  DateTime     @default(now())
+}
+
+model Channel {
+  id       String  @id @default(cuid())
+  bufferId String  @unique
+  rede     String
+  nome     String
+  ativo    Boolean @default(true)
+}
+
+model Credential {
+  id         String   @id @default(cuid())
+  provedor   String   @unique
+  valorCifr  String
+  atualizado DateTime @updatedAt
+}
+
+model ProviderUsage {
+  id       String   @id @default(cuid())
+  provedor String
+  saldo    Decimal? @db.Decimal(14, 4)
+  limite   Decimal? @db.Decimal(14, 4)
+  gastoUsd Decimal? @db.Decimal(10, 6)
+  lidoEm   DateTime @default(now())
+
+  @@index([provedor, lidoEm])
+}

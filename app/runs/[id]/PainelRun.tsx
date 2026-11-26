@@ -1,0 +1,117 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+
+type Step = {
+  nodeId: string;
+  nodeType: string;
+  status: string;
+  custoUsd: number;
+  unidade: string | null;
+  quantidade: number | null;
+  duracaoMs: number | null;
+  erro: string | null;
+};
+
+const FINAIS = new Set(['publicado', 'falhou', 'bloqueado_por_custo', 'aguardando_aprovacao', 'agendado']);
+
+export function PainelRun({
+  runId,
+  statusInicial,
+  erroInicial,
+  steps,
+}: {
+  runId: string;
+  statusInicial: string;
+  erroInicial: string | null;
+  steps: Step[];
+}) {
+  const [status, setStatus] = useState(statusInicial);
+  const [erro, setErro] = useState(erroInicial);
+
+  // Acompanha o progresso sem consultar em laco: o servidor empurra so quando muda.
+  useEffect(() => {
+    if (FINAIS.has(status)) return;
+
+    const es = new EventSource(`/api/runs/${runId}/stream`);
+    es.onmessage = (e) => {
+      const d = JSON.parse(e.data);
+      setStatus(d.status);
+      setErro(d.erro);
+      if (FINAIS.has(d.status)) {
+        es.close();
+        window.location.reload();
+      }
+    };
+    es.onerror = () => es.close();
+    return () => es.close();
+  }, [runId, status]);
+
+  async function acao(caminho: string, corpo?: unknown) {
+    await fetch(`/api/runs/${runId}/${caminho}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: corpo ? JSON.stringify(corpo) : undefined,
+    });
+    window.location.reload();
+  }
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16 }}>
+        <span className={`marca ${status}`}>{status.replace(/_/g, ' ')}</span>
+
+        {status === 'aguardando_aprovacao' && (
+          <>
+            <button onClick={() => acao('approve', { aprovado: true })}>Aprovar roteiro</button>
+            <button className="fraco" onClick={() => acao('approve', { aprovado: false })}>
+              Rejeitar
+            </button>
+          </>
+        )}
+
+        {(status === 'falhou' || status === 'bloqueado_por_custo') && (
+          <button onClick={() => acao('retry')}>Retomar do no que falhou</button>
+        )}
+      </div>
+
+      {erro && (
+        <p className="aviso" style={{ borderLeftColor: 'var(--erro)', color: 'var(--erro)' }}>
+          {erro}
+        </p>
+      )}
+
+      <h2>Passos</h2>
+      {steps.length === 0 ? (
+        <p className="vazio">Ainda nenhum passo gravado.</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Estado</th>
+              <th>Uso</th>
+              <th>Custo</th>
+              <th>Tempo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {steps.map((s) => (
+              <tr key={s.nodeId}>
+                <td>
+                  {s.nodeId} <span style={{ color: 'var(--fraco)' }}>{s.nodeType}</span>
+                </td>
+                <td>
+                  <span className={`marca ${s.status === 'ok' ? 'publicado' : 'falhou'}`}>{s.status}</span>
+                </td>
+                <td>{s.quantidade != null ? `${s.quantidade.toFixed(0)} ${s.unidade}` : '—'}</td>
+                <td>US$ {s.custoUsd.toFixed(4)}</td>
+                <td>{s.duracaoMs != null ? `${(s.duracaoMs / 1000).toFixed(1)}s` : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
+  );
+}
