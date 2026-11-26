@@ -4,7 +4,9 @@ import type { ContextoNo, ResultadoNo } from './envelope';
 export type DefinicaoNo<C = any> = {
   type: string;
   rotulo: string;
-  schema: z.ZodType<C>;
+  // O terceiro parametro deixa a entrada livre: campos com .default() sao
+  // opcionais na entrada e obrigatorios na saida, e ZodType<C> sozinho recusa isso.
+  schema: z.ZodType<C, z.ZodTypeDef, any>;
   /** Estimativa em USD antes de rodar, para o teto de custo. */
   estimar?: (config: C, ctx: ContextoNo<C>) => number;
   run: (ctx: ContextoNo<C>) => Promise<ResultadoNo>;
