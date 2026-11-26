@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { schedule } from '@/lib/providers/buffer';
+import { storageConfigurado, urlAssinada } from '@/lib/providers/storage';
 import type { DefinicaoNo } from '@/lib/engine/registry';
 
 const schema = z.object({
@@ -16,9 +17,18 @@ const no: DefinicaoNo<Config> = {
   schema,
 
   async run({ envelope, config, log }) {
-    const url = envelope.video?.url;
-    if (!url) throw new Error('nao ha video para publicar');
-    if (url.startsWith('file://')) throw new Error('o video precisa estar no storage: configure STORAGE_BUCKET');
+    const chave = envelope.video?.chave;
+
+    if (!chave || !storageConfigurado()) {
+      throw new Error(
+        'o Buffer busca o video por URL, entao ele precisa estar num bucket. ' +
+          'Configure STORAGE_BUCKET e rode o render de novo.',
+      );
+    }
+
+    // URL temporaria em vez de bucket publico: so quem recebe o link acessa,
+    // e ele caduca.
+    const url = urlAssinada(chave);
 
     const texto = [envelope.meta.legenda, (envelope.meta.hashtags ?? []).join(' ')].filter(Boolean).join('\n\n');
 

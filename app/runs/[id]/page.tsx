@@ -45,11 +45,7 @@ export default async function Run(ctx: { params: Promise<{ id: string }> }) {
         <>
           <h2>Video</h2>
           <video
-            src={
-              String(envelope.video.url ?? '').startsWith('http')
-                ? envelope.video.url
-                : `/api/runs/${run.id}/video`
-            }
+            src={`/api/runs/${run.id}/video`}
             controls
             style={{ width: 300, borderRadius: 10 }}
           />

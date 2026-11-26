@@ -8,7 +8,7 @@ import { montarAss } from '@/lib/ffmpeg/ass';
 import { montarPlano, type TemplateVideo } from '@/lib/ffmpeg/build';
 import { conferir, fontesInstaladas, sondar } from '@/lib/ffmpeg/probe';
 import { pastaDoRun } from '@/lib/ffmpeg/paths';
-import { subir } from '@/lib/providers/storage';
+import { storageConfigurado, subir } from '@/lib/providers/storage';
 import { limparDepoisDoRender } from '@/lib/ffmpeg/limpeza';
 import type { DefinicaoNo } from '@/lib/engine/registry';
 
@@ -127,7 +127,11 @@ const no: DefinicaoNo<Config> = {
 
     if (problemas.length) throw new Error(`video reprovado na validacao: ${problemas.join('; ')}`);
 
-    const url = await subir(saidaPath, `videos/${runId}.mp4`, 'video/mp4');
+    // Guarda a chave, nao a URL: a URL assinada expira, entao e gerada na
+    // hora de publicar, e nao congelada no envelope.
+    const chave = await subir(saidaPath, `videos/${runId}.mp4`, 'video/mp4');
+    if (storageConfigurado()) log(`enviado para o bucket: ${chave}`);
+    else log('sem bucket configurado: o video fica so no volume');
 
     // Os clipes por cena ja cumpriram o papel; so o mp4 final precisa ficar.
     await limparDepoisDoRender(pasta);
@@ -135,7 +139,12 @@ const no: DefinicaoNo<Config> = {
     return {
       envelope: {
         ...envelope,
-        video: { url, path: saidaPath, duracao: sonda.duracao, formato: config.resolucao },
+        video: {
+          chave: storageConfigurado() ? chave : undefined,
+          path: saidaPath,
+          duracao: sonda.duracao,
+          formato: config.resolucao,
+        },
         meta: { ...envelope.meta, templateVideoId: config.templateId },
       },
       uso: { provider: 'railway', unidade: 'segundos', quantidade: segundosCpu, modelo: 'render' } as any,

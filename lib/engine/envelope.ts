@@ -16,7 +16,8 @@ export type Envelope = {
     images?: string[];
     captions?: Caption[];
   };
-  video?: { url?: string; path?: string; duracao?: number; formato?: string };
+  /** chave = caminho do objeto no bucket; a URL assinada e gerada ao publicar. */
+  video?: { chave?: string; url?: string; path?: string; duracao?: number; formato?: string };
   meta: {
     nicho?: string;
     templateId?: string;
