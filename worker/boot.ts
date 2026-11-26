@@ -70,6 +70,16 @@ export async function iniciarWorker(): Promise<void> {
   if (jaIniciou) return;
   jaIniciou = true;
 
+  // No modo combinado o worker divide o processo com a interface. Um erro de
+  // stream HTTP — navegador que aborta um video no meio — nao pode matar um
+  // render de varios minutos junto. Erros de verdade continuam no log.
+  process.on('uncaughtException', (e) => {
+    console.error('[worker] uncaughtException ignorado:', e);
+  });
+  process.on('unhandledRejection', (e) => {
+    console.error('[worker] unhandledRejection ignorado:', e);
+  });
+
   console.log('[worker] iniciando');
 
   // Render de video enche disco rapido, e disco cheio aparece como ENOSPC em
