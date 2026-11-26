@@ -5,6 +5,14 @@ set -euo pipefail
 echo "[start] aplicando schema"
 npx prisma db push --skip-generate
 
+# Cria os dois templates e o fluxo de exemplo. E idempotente: nao duplica nada.
+# Deixe SEED_ON_BOOT vazio depois que o fluxo estiver do seu jeito, senao o
+# fluxo de exemplo volta a cada reinicio.
+if [ "${SEED_ON_BOOT:-}" = "true" ]; then
+  echo "[start] semeando templates e fluxo de exemplo"
+  npm run db:seed || echo "[start] seed falhou, seguindo mesmo assim"
+fi
+
 if [ "${WORKER_IN_PROCESS:-}" = "true" ]; then
   echo "[start] modo combinado: interface + worker no mesmo servico"
 
